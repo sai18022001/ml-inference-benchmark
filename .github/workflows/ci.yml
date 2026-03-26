@@ -1,0 +1,135 @@
+name: Build and Benchmark
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    name: Build on Windows (MSVC)
+    runs-on: windows-latest
+
+    steps:
+      # Get Source Code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Python setiup
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Instll Python dependencies
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install onnxruntime numpy matplotlib psutil pandas
+
+      # Download ONNX runtime sdk
+      - name: Download ONNX Runtime SDK
+        shell: pwsh
+        run: |
+          $version = "1.24.4"
+          $url = "https://github.com/microsoft/onnxruntime/releases/download/v$version/onnxruntime-win-x64-$version.zip"
+          $zip = "onnxruntime.zip"
+          Write-Host "Downloading ONNX Runtime $version..."
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "third_party"
+          Write-Host "ONNX Runtime extracted to third_party/"
+
+      # Configure with CMakr
+      - name: Configure CMake
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+
+      # C++ libraries
+      - name: Build
+        run: cmake --build build --config Release
+
+      # Copy binary to bin
+      - name: Copy binary to bin/
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path bin
+          $exePath = Get-ChildItem -Recurse -Filter "ml_benchmark.exe" | 
+                     Select-Object -First 1 -ExpandProperty FullName
+          Copy-Item $exePath bin/
+          Copy-Item third_party/onnxruntime-win-x64-1.24.4/lib/onnxruntime.dll bin/
+          Write-Host "Binary ready at bin/ml_benchmark.exe"
+
+      # Model download
+      - name: Download MobileNetV2 model
+        run: python python/download_model.py
+
+      # Run benchmartk
+      - name: Run benchmark
+        run: |
+          bin/ml_benchmark.exe models/mobilenetv2.onnx results
+
+      # Charts Generate
+      - name: Generate charts
+        run: python python/visualize.py
+
+      # Upload results
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            results/benchmark_results.json
+            results/*.png
+
+  # Linux Build
+  build-linux:
+    name: Build on Linux (GCC)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install onnxruntime numpy matplotlib psutil pandas
+
+      - name: Download ONNX Runtime SDK (Linux)
+        run: |
+          VERSION="1.24.4"
+          URL="https://github.com/microsoft/onnxruntime/releases/download/v${VERSION}/onnxruntime-linux-x64-${VERSION}.tgz"
+          echo "Downloading ONNX Runtime ${VERSION} for Linux..."
+          wget -q $URL -O onnxruntime.tgz
+          mkdir -p third_party
+          tar -xzf onnxruntime.tgz -C third_party/
+          echo "Extracted to third_party/"
+
+      - name: Update CMakeLists for Linux paths
+        run: |
+          sed -i 's/onnxruntime-win-x64-1.24.4/onnxruntime-linux-x64-1.24.4/g' CMakeLists.txt
+          sed -i 's/onnxruntime.lib/libonnxruntime.so/g' CMakeLists.txt
+
+      - name: Configure CMake
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Download MobileNetV2 model
+        run: python python/download_model.py
+
+      - name: Run benchmark
+        run: |
+          mkdir -p bin results
+          cp build/ml_benchmark bin/
+          cp third_party/onnxruntime-linux-x64-1.24.4/lib/libonnxruntime.so* bin/
+          LD_LIBRARY_PATH=bin ./bin/ml_benchmark models/mobilenetv2.onnx results
+
+      - name: Generate charts
+        run: python python/visualize.py
