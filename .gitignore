@@ -1,0 +1,45 @@
+# BUILD OUTPUT
+build/
+out/
+bin/
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# CMAKE CACHE
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+.cmake/
+
+# VS2022 SPECIFIC Editor settings and temp files
+.vs/
+*.user
+*.suo
+*.sdf
+ipch/
+
+# PYTHON
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# MODELS
+models/*.onnx
+models/*.pb
+
+# RESULTS
+results/*.json
+results/*.png
+results/*.csv
+
+# OS FILES
+Thumbs.db
+Desktop.ini
+.DS_Store
