@@ -35,13 +35,18 @@ BenchmarkRunner::BenchmarkRunner(const std::string& model_path)
     session_options_.SetGraphOptimizationLevel(
         GraphOptimizationLevel::ORT_ENABLE_ALL
     );
-
+#ifdef _WIN32
+    // For Windows
     // Convert path to wide string
     std::wstring wide_path(model_path.begin(), model_path.end());
 
     // Load the model — this is where ONNX Runtime reads the file
     // and builds the computation graph in memory
     session_ = Ort::Session(env_, wide_path.c_str(), session_options_);
+#else
+    // For Linux Build
+    session_ = Ort::Session(env_, model_path.c_str(), session_options_);
+#endif
 
     // ==================================================
     // READ MODEL METADATA
@@ -83,8 +88,12 @@ void BenchmarkRunner::configure_session(int num_threads) {
     session_options_.SetGraphOptimizationLevel(
         GraphOptimizationLevel::ORT_ENABLE_ALL
     );
+#ifdef _WIN32
     std::wstring wide_path(model_path_.begin(), model_path_.end());
     session_ = Ort::Session(env_, wide_path.c_str(), session_options_);
+#else
+    session_ = Ort::Session(env_, model_path_.c_str(), session_options_);
+#endif
 }
 
 // ==============================================================
